@@ -1,75 +1,64 @@
-// Creating the map object
-let myMap = L.map("map", {
-    center: [27.96044, -82.30695],
-    zoom: 7
-  });
-  
-  // Adding the tile layer
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+// Store our API endpoint as queryUrl.
+let queryUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson";
+
+// Perform a GET request to the query URL
+d3.json(queryUrl).then(function(data) {
+    createMap(data.features);
+});
+
+function createMap(earthquakeData) {
+    // Create the base map
+    let myMap = L.map("map", {
+        center: [37.09, -95.71],
+        zoom: 5
+    });
+
+    // Add OpenStreetMap tile layer
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(myMap);
-  
-  // Load the GeoJSON data.
-  let geoData = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson";
-  
-  // Get the data with d3.
-  d3.json(geoData).then(function(data) {
-  
-    // Create a new choropleth layer.
-    let geojson = L.choropleth(data, {
-  
-      // Define which property in the features to use.
-      valueProperty: "DP03_16E",
-  
-      // Set the color scale.
-      scale: ["#ffffb2", "#b10026"],
-  
-      // The number of breaks in the step range
-      steps: 10,
-  
-      // q for quartile, e for equidistant, k for k-means
-      mode: "q",
-      style: {
-        // Border color
-        color: "#fff",
-        weight: 1,
-        fillOpacity: 0.8
-      },
-  
-      // Binding a popup to each layer
-      onEachFeature: function(feature, layer) {
-        layer.bindPopup("<strong>" + feature.properties.NAME + "</strong><br /><br />Estimated employed population with children age 6-17: " +
-          feature.properties.DP03_16E + "<br /><br />Estimated Total Income and Benefits for Families: $" + feature.properties.DP03_75E);
-      }
+
+    // Create a GeoJSON layer
+    let earthquakes = L.geoJSON(earthquakeData, {
+        pointToLayer: function(feature, latlng) {
+            let depth = feature.geometry.coordinates[2];
+            let magnitude = feature.properties.mag;
+            let color = getColor(depth);
+            let size = magnitude * 5; // Scale the size of the marker
+
+            return L.circleMarker(latlng, {
+                color: "#000",
+                fillColor: color,
+                weight: 1,
+                opacity: 1,
+                radius: size,
+                fillOpacity: 0.75
+            }).bindPopup(`Magnitude: ${magnitude}<br>Depth: ${depth} km<br>Location: ${feature.properties.place}`);
+        }
     }).addTo(myMap);
-  
-    // Set up the legend.
-    let legend = L.control({ position: "bottomright" });
-    legend.onAdd = function() {
-      let div = L.DomUtil.create("div", "info legend");
-      let limits = geojson.options.limits;
-      let colors = geojson.options.colors;
-      let labels = [];
-  
-      // Add the minimum and maximum.
-      let legendInfo = "<h1>Population with Children<br />(ages 6-17)</h1>" +
-        "<div class=\"labels\">" +
-          "<div class=\"min\">" + limits[0] + "</div>" +
-          "<div class=\"max\">" + limits[limits.length - 1] + "</div>" +
-        "</div>";
-  
-      div.innerHTML = legendInfo;
-  
-      limits.forEach(function(limit, index) {
-        labels.push("<li style=\"background-color: " + colors[index] + "\"></li>");
-      });
-  
-      div.innerHTML += "<ul>" + labels.join("") + "</ul>";
-      return div;
+
+// Set up a legend
+    let legend = L.control({position: 'bottomright'});
+
+    legend.onAdd = function () {
+        let div = L.DomUtil.create('div', 'legend');
+        div.innerHTML += '<h4>Depth (km)</h4>';
+        div.innerHTML += '<i style="background: #ff0000"></i><span>-10-10</span><br>';
+        div.innerHTML += '<i style="background: #ff7f00"></i><span>10-30</span><br>';
+        div.innerHTML += '<i style="background: #ffff00"></i><span>30-50</span><br>';
+        div.innerHTML += '<i style="background: #7fff00"></i><span>50-70</span><br>';
+        div.innerHTML += '<i style="background: #00ff00"></i><span>70-90</span><br>';
+        div.innerHTML += '<i style="background: #00ff00"></i><span>90+</span><br>';
+        return div;
     };
-  
-    // Adding the legend to the map
     legend.addTo(myMap);
-  
-  });
-  
+}
+
+function getColor(depth) {
+    return depth > 90 ? '#00ff00' : 
+           depth > 70 ? '#7fff00' : 
+           depth > 50 ? '#ffff00' : 
+           depth > 30 ? '#ff7f00' : 
+           depth > 10 ? '#ff0000' : 
+                        '#ff0000';  
+}
